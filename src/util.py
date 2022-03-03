@@ -39,7 +39,7 @@ def transfer(model, model_weights):
     return transfered_model_weights
 
 # draw the body keypoint and lims
-def draw_bodypose(canvas, candidate, subset):
+def draw_bodypose(canvas, candidate, subset, scale=1.0):
     stickwidth = 4
     limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10], \
                [10, 11], [2, 12], [12, 13], [13, 14], [2, 1], [1, 15], [15, 17], \
@@ -54,15 +54,15 @@ def draw_bodypose(canvas, candidate, subset):
             if index == -1:
                 continue
             x, y = candidate[index][0:2]
-            cv2.circle(canvas, (int(x), int(y)), 4, colors[i], thickness=-1)
+            cv2.circle(canvas, (int(x*scale), int(y*scale)), 4, colors[i], thickness=-1)
     for i in range(17):
         for n in range(len(subset)):
             index = subset[n][np.array(limbSeq[i]) - 1]
             if -1 in index:
                 continue
             cur_canvas = canvas.copy()
-            Y = candidate[index.astype(int), 0]
-            X = candidate[index.astype(int), 1]
+            Y = candidate[index.astype(int), 0]*scale
+            X = candidate[index.astype(int), 1]*scale
             mX = np.mean(X)
             mY = np.mean(Y)
             length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5

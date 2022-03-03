@@ -1,15 +1,12 @@
 import cv2
 import numpy as np
 import math
-import time
-from scipy.ndimage.filters import gaussian_filter
-import matplotlib.pyplot as plt
-import matplotlib
 import torch
-from torchvision import transforms
 
 from src import util
 from src.model import bodypose_model
+
+from towhee.functional import DataCollection
 
 class Body(object):
     def __init__(self, model_path):
@@ -33,8 +30,9 @@ class Body(object):
         paf_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 38))
 
         for m in range(len(multiplier)):
-            scale = multiplier[m]
-            imageToTest = cv2.resize(oriImg, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+            # scale = multiplier[m]
+            # imageToTest = cv2.resize(oriImg, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+            imageToTest = oriImg
             imageToTest_padded, pad = util.padRightDownCorner(imageToTest, stride, padValue)
             im = np.transpose(np.float32(imageToTest_padded[:, :, :, np.newaxis]), (3, 2, 0, 1)) / 256 - 0.5
             im = np.ascontiguousarray(im)
@@ -57,19 +55,19 @@ class Body(object):
 
             # paf = np.transpose(np.squeeze(net.blobs[output_blobs.keys()[0]].data), (1, 2, 0))  # output 0 is PAFs
             paf = np.transpose(np.squeeze(Mconv7_stage6_L1), (1, 2, 0))  # output 0 is PAFs
-            paf = cv2.resize(paf, (0, 0), fx=stride, fy=stride, interpolation=cv2.INTER_CUBIC)
+            paf = cv2.resize(paf, (0, 0), fx=stride, fy=stride, interpolation=cv2.INTER_NEAREST)
             paf = paf[:imageToTest_padded.shape[0] - pad[2], :imageToTest_padded.shape[1] - pad[3], :]
-            paf = cv2.resize(paf, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
+            paf = cv2.resize(paf, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_NEAREST)
 
             heatmap_avg += heatmap_avg + heatmap / len(multiplier)
             paf_avg += + paf / len(multiplier)
 
-        all_peaks = []
-        peak_counter = 0
-
-        for part in range(18):
+        idgen = iter(range(100000))
+        def find_peak(part):
             map_ori = heatmap_avg[:, :, part]
-            one_heatmap = gaussian_filter(map_ori, sigma=3)
+            # one_heatmap = gaussian_filter(map_ori, sigma=3)
+            kernel = np.ones((3,3),np.float32)/9
+            one_heatmap = cv2.filter2D(map_ori,-1,kernel)
 
             map_left = np.zeros(one_heatmap.shape)
             map_left[1:, :] = one_heatmap[:-1, :]
@@ -84,11 +82,10 @@ class Body(object):
                 (one_heatmap >= map_left, one_heatmap >= map_right, one_heatmap >= map_up, one_heatmap >= map_down, one_heatmap > thre1))
             peaks = list(zip(np.nonzero(peaks_binary)[1], np.nonzero(peaks_binary)[0]))  # note reverse
             peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]
-            peak_id = range(peak_counter, peak_counter + len(peaks))
-            peaks_with_score_and_id = [peaks_with_score[i] + (peak_id[i],) for i in range(len(peak_id))]
-
-            all_peaks.append(peaks_with_score_and_id)
-            peak_counter += len(peaks)
+            return peaks_with_score
+            
+        all_peaks = DataCollection.range(18).stream().set_parallel(4).map(find_peak).to_list()
+        all_peaks = [[ x + (next(idgen),) for x in peaks_with_score] for peaks_with_score in all_peaks]
 
         # find connection in the specified sequence, center 29 is in the position 15
         limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10], \
@@ -101,7 +98,7 @@ class Body(object):
 
         connection_all = []
         special_k = []
-        mid_num = 10
+        mid_num = 5
 
         for k in range(len(mapIdx)):
             score_mid = paf_avg[:, :, [x - 19 for x in mapIdx[k]]]
@@ -206,13 +203,3 @@ class Body(object):
         # subset: n*20 array, 0-17 is the index in candidate, 18 is the total score, 19 is the total parts
         # candidate: x, y, score, id
         return candidate, subset
-
-if __name__ == "__main__":
-    body_estimation = Body('../model/body_pose_model.pth')
-
-    test_image = '../images/ski.jpg'
-    oriImg = cv2.imread(test_image)  # B,G,R order
-    candidate, subset = body_estimation(oriImg)
-    canvas = util.draw_bodypose(oriImg, candidate, subset)
-    plt.imshow(canvas[:, :, [2, 1, 0]])
-    plt.show()
