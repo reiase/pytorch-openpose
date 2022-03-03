@@ -1,3 +1,9 @@
+## video demo for towhee data collection
+
+1. demo_dc.py: a very simple video demo;
+2. demo_dc2.py: video demo using dag execution;
+
+
 ## pytorch-openpose
 
 pytorch implementation of [openpose](https://github.com/CMU-Perceptual-Computing-Lab/openpose) including **Body and Hand Pose Estimation**, and the pytorch model is directly converted from [openpose](https://github.com/CMU-Perceptual-Computing-Lab/openpose) caffemodel by [caffemodel2pytorch](https://github.com/vadimkantorov/caffemodel2pytorch). You could implement face keypoint detection in the same way if you are interested in. Pay attention to that the face keypoint detector was trained using the procedure described in [Simon et al. 2017] for hands.
